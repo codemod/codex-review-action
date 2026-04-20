@@ -1,18 +1,17 @@
 # Codex Review Action
 
-Reusable GitHub Actions workflow for running [`openai/codex-action`](https://github.com/openai/codex-action) as a PR reviewer with:
+Composite GitHub Action for running [`openai/codex-action`](https://github.com/openai/codex-action) as a PR reviewer with:
 
 - Azure OpenAI support
 - PR summary comment upsert
 - inline review comments when findings can be anchored to the diff
-- same-repo-only execution when secrets are present
-
-This repository packages the review logic as a reusable workflow, not a composite action. The flow needs multiple jobs, distinct permissions, and GitHub comment APIs, which fit `workflow_call` better than `action.yml`.
+- reusable central review logic for multiple repositories
 
 ## Files
 
-- `.github/workflows/review.yml`: reusable workflow entrypoint
+- `action.yml`: composite action entrypoint
 - `.github/codex/review-output-schema.json`: reference copy of the structured Codex output schema
+- `.github/workflows/review.yml`: legacy reusable workflow entrypoint
 
 ## Required caller configuration
 
@@ -30,7 +29,7 @@ https://centralus.api.cognitive.microsoft.com/openai/v1/responses
 
 ## Recommended caller workflow
 
-Use a thin caller workflow in each repository. Keep triggers in the caller repo, then delegate the review job here.
+Use a thin caller workflow in each repository. Keep triggers and permissions in the caller repo, then delegate the review steps here.
 
 ```yaml
 name: Codex PR Review
@@ -53,40 +52,44 @@ on:
 
 jobs:
   codex-review:
-    uses: your-org/codex-review-action/.github/workflows/review.yml@main
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
       issues: write
-    with:
-      pr_number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr_number }}
-      codex_model: gpt-5.3-codex
-      node_version: "24"
-      pnpm_version: "10.19.0"
-      install_command: pnpm install --frozen-lockfile
-      working_directory: .
-      codex_effort: medium
-      sandbox: workspace-write
-      review_focus: |
-        Focus on:
-        - correctness bugs
-        - behavioral regressions
-        - missing tests or missing edge-case coverage
-        - security issues
-      extra_prompt: |
-        Follow any repository-specific review guidance files when present.
-    secrets:
-      azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
-      azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_RESPONSES_ENDPOINT }}
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: your-org/codex-review-action@main
+        with:
+          github_token: ${{ github.token }}
+          pr_number: ${{ github.event.pull_request.number }}
+          codex_model: ${{ vars.AZURE_OPENAI_CODEX_MODEL }}
+          azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_RESPONSES_ENDPOINT }}
+          node_version: "24"
+          pnpm_version: "10.19.0"
+          install_command: pnpm install --frozen-lockfile
+          working_directory: .
+          codex_effort: medium
+          sandbox: workspace-write
+          review_focus: |
+            Focus on:
+            - correctness bugs
+            - behavioral regressions
+            - missing tests or missing edge-case coverage
+            - security issues
+          extra_prompt: |
+            Follow any repository-specific review guidance files when present.
 ```
 
 ## Security model
 
-The reusable workflow is intentionally same-repo only when secrets are present:
+The shared action is meant to run only in caller jobs that already enforce same-repo execution when secrets are present.
 
-- it resolves the PR by API
-- it checks whether `pr.head.repo.full_name == github.repository`
-- if the head is from a fork, the secret-bearing review job is skipped
+Recommended caller guard:
+
+- check whether `pr.head.repo.full_name == github.repository`
+- skip secret-bearing review jobs for fork PRs
 
 That means:
 
@@ -98,8 +101,11 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 
 ## Inputs
 
+- `github_token`: required token for GitHub API calls, checkout, and comment posting
 - `pr_number`: required PR number to review
 - `codex_model`: required Azure deployment name
+- `azure_openai_api_key`: required Azure OpenAI API key
+- `azure_openai_responses_endpoint`: required Azure OpenAI Responses API endpoint
 - `working_directory`: checkout subdirectory to run from
 - `node_version`: Node.js version for `actions/setup-node`
 - `pnpm_version`: pnpm version for `pnpm/action-setup`
@@ -111,12 +117,9 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 
 ## Secrets
 
-- `azure_openai_api_key`
-- `azure_openai_responses_endpoint`
-
 ## Notes
 
-- The workflow expects `pnpm` by default, but the caller can override `install_command`, `node_version`, `pnpm_version`, and `working_directory`.
-- The reusable workflow embeds its output schema inline so callers do not need to copy schema files into their own repositories.
-- The reusable workflow emits inline comments only when a finding has a valid `path` and a line that GitHub can anchor on the right side of the PR diff.
-- If Codex returns non-JSON output unexpectedly, the workflow falls back to treating that output as the summary comment body.
+- The action expects `pnpm` by default, but the caller can override `install_command`, `node_version`, `pnpm_version`, and `working_directory`.
+- The action embeds its output schema inline so callers do not need to copy schema files into their own repositories.
+- The action emits inline comments only when a finding has a valid `path` and a line that GitHub can anchor on the right side of the PR diff.
+- If Codex returns non-JSON output unexpectedly, the action falls back to treating that output as the summary comment body.
