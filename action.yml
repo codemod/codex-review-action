@@ -391,18 +391,6 @@ runs:
             }
           }
 
-          const anchoredKeys = new Set(anchoredFindings.map((finding) => finding.key));
-
-          for (const [key, comment] of existingInlineComments) {
-            if (!anchoredKeys.has(key)) {
-              await github.rest.pulls.deleteReviewComment({
-                owner,
-                repo,
-                comment_id: comment.id,
-              });
-            }
-          }
-
           for (const finding of anchoredFindings) {
             if (existingInlineComments.has(finding.key)) {
               continue;
