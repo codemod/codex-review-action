@@ -391,28 +391,29 @@ runs:
             }
           }
 
-          for (const finding of anchoredFindings) {
-            if (existingInlineComments.has(finding.key)) {
-              continue;
-            }
+          const newInlineComments = anchoredFindings
+            .filter((finding) => !existingInlineComments.has(finding.key))
+            .map((finding) => ({
+              path: finding.path,
+              line: finding.line,
+              side: "RIGHT",
+              body: [
+                `**[${finding.severity.toUpperCase()}] ${finding.title}**`,
+                "",
+                finding.body,
+                "",
+                `<!-- codex-inline:${finding.key} -->`,
+              ].join("\n"),
+            }));
 
-            const commentBody = [
-              `**[${finding.severity.toUpperCase()}] ${finding.title}**`,
-              "",
-              finding.body,
-              "",
-              `<!-- codex-inline:${finding.key} -->`,
-            ].join("\n");
-
-            await github.rest.pulls.createReviewComment({
+          if (newInlineComments.length > 0) {
+            await github.rest.pulls.createReview({
               owner,
               repo,
               pull_number,
               commit_id,
-              path: finding.path,
-              line: finding.line,
-              side: "RIGHT",
-              body: commentBody,
+              event: "COMMENT",
+              comments: newInlineComments,
             });
           }
 

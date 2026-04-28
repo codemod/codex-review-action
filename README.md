@@ -121,6 +121,6 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 
 - The action expects `pnpm` by default, but the caller can override `install_command`, `node_version`, `pnpm_version`, and `working_directory`.
 - The action embeds its output schema inline so callers do not need to copy schema files into their own repositories.
-- The action emits inline comments only when a finding has a valid `path` and a line that GitHub can anchor on the right side of the PR diff.
+- The action emits inline comments in a single batched PR review when findings have a valid `path` and a line that GitHub can anchor on the right side of the PR diff.
 - The action preserves existing inline comments across reruns so review threads can be resolved manually; only the summary comment is updated in place.
 - If Codex returns non-JSON output unexpectedly, the action falls back to treating that output as the summary comment body.
