@@ -1,0 +1,114 @@
+name: Sync Action Pins
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      action_sha:
+        description: Optional full action SHA to sync instead of the current workflow commit
+        required: false
+        type: string
+
+jobs:
+  sync-pins:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repo: codemod/arc-codemods
+            repo_name: arc-codemods
+          - repo: codemod/codemod
+            repo_name: codemod
+          - repo: codemod/codemod-app
+            repo_name: codemod-app
+    permissions:
+      contents: read
+    steps:
+      - name: Resolve target SHA
+        id: resolve
+        env:
+          INPUT_SHA: ${{ github.event.inputs.action_sha }}
+        run: |
+          target_sha="${INPUT_SHA:-${GITHUB_SHA}}"
+          if ! printf '%s' "$target_sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Target SHA must be a full 40-character commit SHA" >&2
+            exit 1
+          fi
+          echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${target_sha:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.ACTION_SYNC_APP_ID }}
+          private-key: ${{ secrets.ACTION_SYNC_APP_PRIVATE_KEY }}
+          owner: codemod
+          repositories: ${{ matrix.repo_name }}
+
+      - name: Checkout target repository
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ matrix.repo }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: repo
+          fetch-depth: 0
+
+      - name: Update pinned action SHA
+        id: update
+        working-directory: repo
+        env:
+          TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
+        run: |
+          workflow_path=".github/workflows/codex-pr-review.yml"
+
+          if [ ! -f "$workflow_path" ]; then
+            echo "Expected workflow file not found: $workflow_path" >&2
+            exit 1
+          fi
+
+          current_ref=$(grep -Eo 'codemod/codex-review-action@[0-9a-f]{40}' "$workflow_path" | head -n 1 || true)
+          if [ -z "$current_ref" ]; then
+            echo "Pinned codex-review-action SHA not found in $workflow_path" >&2
+            exit 1
+          fi
+
+          current_sha="${current_ref##*@}"
+          echo "current_sha=$current_sha" >> "$GITHUB_OUTPUT"
+
+          if [ "$current_sha" = "$TARGET_SHA" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          perl -0pi -e "s/codemod\\/codex-review-action\\@[0-9a-f]{40}/codemod\\/codex-review-action\@$ENV{TARGET_SHA}/" "$workflow_path"
+
+          if git diff --quiet -- "$workflow_path"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          path: repo
+          branch: codex/update-codex-review-action-${{ steps.resolve.outputs.short_sha }}
+          delete-branch: true
+          commit-message: "chore(ci): update codex review action to ${{ steps.resolve.outputs.short_sha }}"
+          title: "chore(ci): update codex review action to ${{ steps.resolve.outputs.short_sha }}"
+          body: |
+            This PR updates the pinned `codemod/codex-review-action` SHA in `.github/workflows/codex-pr-review.yml`.
+
+            Target SHA: `${{ steps.resolve.outputs.target_sha }}`
+            Previous SHA: `${{ steps.update.outputs.current_sha }}`
+
+            This PR was created automatically from [`codemod/codex-review-action`](https://github.com/codemod/codex-review-action).
+          draft: true
+

@@ -70,7 +70,7 @@ jobs:
           pnpm_version: "10.19.0"
           install_command: pnpm install --frozen-lockfile
           working_directory: .
-          codex_effort: medium
+          codex_effort: high
           sandbox: workspace-write
           review_focus: |
             Focus on:
@@ -122,5 +122,23 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 - The action expects `pnpm` by default, but the caller can override `install_command`, `node_version`, `pnpm_version`, and `working_directory`.
 - The action embeds its output schema inline so callers do not need to copy schema files into their own repositories.
 - The action emits inline comments in a single batched PR review when findings have a valid `path` and a line that GitHub can anchor on the right side of the PR diff.
-- The action preserves existing inline comments across reruns so review threads can be resolved manually; only the summary comment is updated in place.
+- The action posts inline comments only for initial PR review events (`opened`, `reopened`, `ready_for_review`) and for manual `workflow_dispatch` reruns; `synchronize` reruns update only the summary comment to avoid repeated inline comment spam.
+- The action preserves existing inline comments across reruns so review threads can be resolved manually; only the summary comment is updated in place after the initial inline review.
 - If Codex returns non-JSON output unexpectedly, the action falls back to treating that output as the summary comment body.
+
+## Pin Sync Workflow
+
+This repository includes `.github/workflows/sync-action-pins.yml` to keep the pinned `codemod/codex-review-action@<sha>` reference updated in downstream repositories:
+
+- `codemod/arc-codemods`
+- `codemod/codemod`
+- `codemod/codemod-app`
+
+It runs on pushes to `main` and on manual dispatch. For each target repository, it updates `.github/workflows/codex-pr-review.yml` only when the pinned SHA differs, then opens or updates a draft PR on branch `codex/update-codex-review-action-<short-sha>`.
+
+Required repository secrets for this workflow:
+
+- `ACTION_SYNC_APP_ID`
+- `ACTION_SYNC_APP_PRIVATE_KEY`
+
+Those secrets should belong to a GitHub App installation that has `contents: write` and `pull_requests: write` access to the three target repositories.

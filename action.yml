@@ -36,7 +36,7 @@ inputs:
   codex_effort:
     description: Codex reasoning effort.
     required: false
-    default: medium
+    default: high
   sandbox:
     description: Codex sandbox mode.
     required: false
@@ -68,6 +68,8 @@ runs:
       uses: actions/github-script@v7
       env:
         PR_NUMBER: ${{ inputs.pr_number }}
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_ACTION: ${{ github.event.action }}
       with:
         github-token: ${{ inputs.github_token }}
         script: |
@@ -90,6 +92,8 @@ runs:
           core.setOutput("head_repo_full_name", pr.head.repo.full_name);
           core.setOutput("title", pr.title ?? "");
           core.setOutput("body", pr.body ?? "");
+          core.setOutput("event_name", process.env.EVENT_NAME ?? "");
+          core.setOutput("event_action", process.env.EVENT_ACTION ?? "");
 
     - name: Checkout code
       uses: actions/checkout@v5
@@ -227,6 +231,12 @@ runs:
           ${{ inputs.review_focus }}
 
           Ignore style-only nits.
+          Be thorough and systematic, not selective.
+          Inspect every changed file before finalizing the review.
+          Look for multiple distinct issues if they exist; do not stop after the first 1-2 findings.
+          Prefer high-confidence findings, but aim for comprehensive coverage of the diff.
+          Check interactions across files, not just isolated lines.
+          Call out missing tests when logic changes are not adequately covered.
 
           Return JSON that matches the provided schema.
           Only include actionable findings.
@@ -252,6 +262,8 @@ runs:
         CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
         PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
         PR_HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+        PR_EVENT_NAME: ${{ steps.resolve.outputs.event_name }}
+        PR_EVENT_ACTION: ${{ steps.resolve.outputs.event_action }}
       with:
         github-token: ${{ inputs.github_token }}
         script: |
@@ -261,6 +273,11 @@ runs:
           const repo = context.repo.repo;
           const pull_number = Number(process.env.PR_NUMBER);
           const commit_id = process.env.PR_HEAD_SHA;
+          const eventName = process.env.PR_EVENT_NAME || "";
+          const eventAction = process.env.PR_EVENT_ACTION || "";
+          const allowInlineComments =
+            eventName === "workflow_dispatch" ||
+            (eventName === "pull_request" && ["opened", "reopened", "ready_for_review"].includes(eventAction));
           const summaryMarker = "<!-- codex-review-summary -->";
           const severityOrder = { high: 0, medium: 1, low: 2 };
 
@@ -406,7 +423,7 @@ runs:
               ].join("\n"),
             }));
 
-          if (newInlineComments.length > 0) {
+          if (allowInlineComments && newInlineComments.length > 0) {
             await github.rest.pulls.createReview({
               owner,
               repo,
