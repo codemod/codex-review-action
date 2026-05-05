@@ -141,4 +141,4 @@ Required repository secrets for this workflow:
 - `ACTION_SYNC_APP_ID`
 - `ACTION_SYNC_APP_PRIVATE_KEY`
 
-Those secrets should belong to a GitHub App installation that has `contents: write` and `pull_requests: write` access to the three target repositories.
+Those secrets should belong to a GitHub App installation that has `contents: write`, `pull_requests: write`, and `workflows: write` access to the three target repositories.
