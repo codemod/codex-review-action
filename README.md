@@ -71,7 +71,7 @@ jobs:
           install_command: pnpm install --frozen-lockfile
           working_directory: .
           codex_effort: high
-          sandbox: workspace-write
+          permission_profile: ":workspace"
           review_focus: |
             Focus on:
             - correctness bugs
@@ -111,7 +111,9 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 - `pnpm_version`: pnpm version for `pnpm/action-setup`
 - `install_command`: dependency installation command
 - `codex_effort`: Codex effort level
-- `sandbox`: Codex sandbox mode
+- `sandbox`: legacy Codex sandbox mode, used only when `permission_profile` is empty
+- `permission_profile`: Codex permission profile, default `:workspace`
+- `codex_version`: optional Codex CLI version passed through to `openai/codex-action`
 - `review_focus`: extra review criteria inserted into the prompt
 - `extra_prompt`: extra prompt text appended after the standard review instructions
 
@@ -120,7 +122,9 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 ## Notes
 
 - The action expects `pnpm` by default, but the caller can override `install_command`, `node_version`, `pnpm_version`, and `working_directory`.
-- The action embeds its output schema inline so callers do not need to copy schema files into their own repositories.
+- The action generates its output schema at runtime so callers do not need to copy schema files into their own repositories.
+- The action precomputes the PR diff stat, changed files, and a bounded patch snapshot before invoking Codex so the model has review context immediately and can still inspect the checkout for deeper analysis.
+- If Codex returns a meta-response claiming it cannot inspect the PR diff, the action fails closed instead of posting that response as a PR review.
 - The action emits inline comments in a single batched PR review when findings have a valid `path` and a line that GitHub can anchor on the right side of the PR diff.
 - The action posts inline comments only for initial PR review events (`opened`, `reopened`, `ready_for_review`) and for manual `workflow_dispatch` reruns; `synchronize` reruns update only the summary comment to avoid repeated inline comment spam.
 - The action preserves existing inline comments across reruns so review threads can be resolved manually; only the summary comment is updated in place after the initial inline review.
