@@ -81,9 +81,37 @@ runs:
       with:
         github-token: ${{ inputs.github_token }}
         script: |
+          if (context.eventName === "issue_comment") {
+            const issue = context.payload.issue;
+            const comment = context.payload.comment;
+            const allowedAssociations = new Set(["OWNER", "MEMBER"]);
+
+            if (!issue?.pull_request) {
+              core.setFailed("/codex-review can only be used on a pull request");
+              return;
+            }
+
+            if (String(comment?.body || "") !== "/codex-review") {
+              core.setFailed("The issue_comment event did not contain the /codex-review command");
+              return;
+            }
+
+            if (!allowedAssociations.has(comment?.author_association)) {
+              core.setFailed("/codex-review can only be run by a repository owner or organization member");
+              return;
+            }
+          }
+
           const prNumber = Number(process.env.PR_NUMBER);
           if (!Number.isFinite(prNumber)) {
             core.setFailed("pr_number input must be numeric");
+            return;
+          }
+          if (
+            context.eventName === "issue_comment" &&
+            prNumber !== Number(context.payload.issue?.number)
+          ) {
+            core.setFailed("pr_number must match the pull request where /codex-review was posted");
             return;
           }
           const { data: pr } = await github.rest.pulls.get({
@@ -91,6 +119,18 @@ runs:
             repo: context.repo.repo,
             pull_number: prNumber,
           });
+
+          if (context.eventName === "issue_comment") {
+            if (pr.draft) {
+              core.setFailed("/codex-review cannot run on a draft pull request");
+              return;
+            }
+
+            if (pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed("/codex-review cannot run on a fork pull request because the review job uses repository secrets");
+              return;
+            }
+          }
 
           core.setOutput("pr_number", String(pr.number));
           core.setOutput("base_ref", pr.base.ref);
@@ -454,6 +494,7 @@ runs:
           const eventAction = process.env.PR_EVENT_ACTION || "";
           const allowInlineComments =
             eventName === "workflow_dispatch" ||
+            eventName === "issue_comment" ||
             (eventName === "pull_request" && ["opened", "reopened", "ready_for_review"].includes(eventAction));
           const summaryMarker = "<!-- codex-review-summary -->";
           const severityOrder = { high: 0, medium: 1, low: 2 };

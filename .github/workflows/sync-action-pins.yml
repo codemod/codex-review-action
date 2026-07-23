@@ -20,10 +20,13 @@ jobs:
         include:
           - repo: codemod/arc-codemods
             repo_name: arc-codemods
+            command_workflow_template: examples/codex-review-command-arc-codemods.yml
           - repo: codemod/codemod
             repo_name: codemod
+            command_workflow_template: examples/codex-review-command.yml
           - repo: codemod/codemod-app
             repo_name: codemod-app
+            command_workflow_template: examples/codex-review-command.yml
     permissions:
       contents: read
     steps:
@@ -49,6 +52,14 @@ jobs:
           owner: codemod
           repositories: ${{ matrix.repo_name }}
 
+      - name: Checkout action source at target SHA
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ steps.resolve.outputs.target_sha }}
+          path: action-source
+          persist-credentials: false
+
       - name: Checkout target repository
         uses: actions/checkout@v5
         with:
@@ -57,36 +68,41 @@ jobs:
           path: repo
           fetch-depth: 0
 
-      - name: Update pinned action SHA
+      - name: Update action pin and command workflow
         id: update
         working-directory: repo
         env:
+          ACTION_SOURCE: ${{ github.workspace }}/action-source
+          COMMAND_WORKFLOW_TEMPLATE: ${{ matrix.command_workflow_template }}
           TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
         run: |
-          workflow_path=".github/workflows/codex-pr-review.yml"
+          review_workflow_path=".github/workflows/codex-pr-review.yml"
+          command_workflow_path=".github/workflows/codex-review-command.yml"
+          template_path="$ACTION_SOURCE/$COMMAND_WORKFLOW_TEMPLATE"
 
-          if [ ! -f "$workflow_path" ]; then
-            echo "Expected workflow file not found: $workflow_path" >&2
+          if [ ! -f "$review_workflow_path" ]; then
+            echo "Expected workflow file not found: $review_workflow_path" >&2
+            exit 1
+          fi
+          if [ ! -f "$template_path" ]; then
+            echo "Command workflow template not found at target SHA: $COMMAND_WORKFLOW_TEMPLATE" >&2
             exit 1
           fi
 
-          current_ref=$(grep -Eo 'codemod/codex-review-action@[0-9a-f]{40}' "$workflow_path" | head -n 1 || true)
-          if [ -z "$current_ref" ]; then
-            echo "Pinned codex-review-action SHA not found in $workflow_path" >&2
-            exit 1
-          fi
-
+          current_ref=$(grep -Eo 'codemod/codex-review-action@[0-9a-f]{40}' "$review_workflow_path" | head -n 1 || true)
           current_sha="${current_ref##*@}"
+          current_sha="${current_sha:-not-present}"
           echo "current_sha=$current_sha" >> "$GITHUB_OUTPUT"
 
-          if [ "$current_sha" = "$TARGET_SHA" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "$current_sha" != "not-present" ] && [ "$current_sha" != "$TARGET_SHA" ]; then
+            perl -0pi -e "s/codemod\\/codex-review-action\\@[0-9a-f]{40}/codemod\\/codex-review-action\\@$TARGET_SHA/" "$review_workflow_path"
           fi
 
-          perl -0pi -e "s/codemod\\/codex-review-action\\@[0-9a-f]{40}/codemod\\/codex-review-action\@$ENV{TARGET_SHA}/" "$workflow_path"
+          mkdir -p "$(dirname "$command_workflow_path")"
+          cp "$template_path" "$command_workflow_path"
+          perl -0pi -e "s/codemod\\/codex-review-action\\@main/codemod\\/codex-review-action\\@$TARGET_SHA/" "$command_workflow_path"
 
-          if git diff --quiet -- "$workflow_path"; then
+          if [ -z "$(git status --porcelain -- "$review_workflow_path" "$command_workflow_path")" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -104,11 +120,13 @@ jobs:
           commit-message: "chore(ci): update codex review action to ${{ steps.resolve.outputs.short_sha }}"
           title: "chore(ci): update codex review action to ${{ steps.resolve.outputs.short_sha }}"
           body: |
-            This PR updates the pinned `codemod/codex-review-action` SHA in `.github/workflows/codex-pr-review.yml`.
+            This PR syncs the Codex review integration from [`codemod/codex-review-action`](https://github.com/codemod/codex-review-action):
+
+            - updates the pinned action SHA in `.github/workflows/codex-pr-review.yml` when that workflow uses the central action
+            - adds or updates `.github/workflows/codex-review-command.yml` so owners and organization members can trigger a review by commenting `/codex-review` on a PR
 
             Target SHA: `${{ steps.resolve.outputs.target_sha }}`
-            Previous SHA: `${{ steps.update.outputs.current_sha }}`
+            Previous automatic-review SHA: `${{ steps.update.outputs.current_sha }}`
 
             This PR was created automatically from [`codemod/codex-review-action`](https://github.com/codemod/codex-review-action).
           draft: true
-

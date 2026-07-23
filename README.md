@@ -5,11 +5,14 @@ Composite GitHub Action for running [`openai/codex-action`](https://github.com/o
 - Azure OpenAI support
 - PR summary comment upsert
 - inline review comments when findings can be anchored to the diff
+- `/codex-review` PR comment trigger for repository owners and organization members
 - reusable central review logic for multiple repositories
 
 ## Files
 
 - `action.yml`: composite action entrypoint
+- `examples/codex-review-command.yml`: standard slash-command caller workflow
+- `examples/codex-review-command-arc-codemods.yml`: `arc-codemods` slash-command workflow with repository-specific review settings
 - `.github/codex/review-output-schema.json`: reference copy of the structured Codex output schema
 - `.github/workflows/review.yml`: legacy reusable workflow entrypoint
 
@@ -59,7 +62,7 @@ jobs:
       issues: write
     if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
-      - uses: your-org/codex-review-action@main
+      - uses: codemod/codex-review-action@main
         with:
           github_token: ${{ github.token }}
           pr_number: ${{ github.event.pull_request.number }}
@@ -82,9 +85,35 @@ jobs:
             Follow any repository-specific review guidance files when present.
 ```
 
+## `/codex-review` slash command
+
+GitHub event triggers belong to the consumer repository, so a composite action cannot register a slash command by itself. The pin-sync workflow described below automatically adds `.github/workflows/codex-review-command.yml` to the three managed consumer repositories. For another consumer repository, copy [`examples/codex-review-command.yml`](examples/codex-review-command.yml) there manually.
+
+Once that workflow is present on the consumer repository's default branch, a repository owner or organization member can add this exact PR comment:
+
+```text
+/codex-review
+```
+
+The workflow intentionally:
+
+- listens only for newly created PR comments
+- accepts only the exact `/codex-review` comment
+- accepts only GitHub `OWNER` and `MEMBER` author associations
+- refuses draft PRs
+- refuses fork PRs before checking out or running code with repository secrets
+- allows inline review comments for command-triggered reviews
+- serializes reviews for the same PR so repeated commands do not overlap
+
+The caller-level `if` avoids starting runners for unrelated comments. The action repeats the authorization, draft, and same-repository checks as defense in depth.
+
+Pin `codemod/codex-review-action` to a full commit SHA in production rather than leaving the example's `@main` reference in place.
+
 ## Security model
 
 The shared action is meant to run only in caller jobs that already enforce same-repo execution when secrets are present.
+
+For `issue_comment` events, the action also enforces the exact `/codex-review` command, `OWNER` or `MEMBER` association, non-draft status, and same-repository head before checkout.
 
 Recommended caller guard:
 
@@ -126,19 +155,23 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 - The action precomputes the PR diff stat, changed files, and a bounded patch snapshot before invoking Codex so the model has review context immediately and can still inspect the checkout for deeper analysis.
 - If Codex returns a meta-response claiming it cannot inspect the PR diff, the action fails closed instead of posting that response as a PR review.
 - The action emits inline comments in a single batched PR review when findings have a valid `path` and a line that GitHub can anchor on the right side of the PR diff.
-- The action posts inline comments only for initial PR review events (`opened`, `reopened`, `ready_for_review`) and for manual `workflow_dispatch` reruns; `synchronize` reruns update only the summary comment to avoid repeated inline comment spam.
+- The action posts inline comments for `/codex-review` command runs, initial PR review events (`opened`, `reopened`, `ready_for_review`), and manual `workflow_dispatch` reruns; `synchronize` reruns update only the summary comment to avoid repeated inline comment spam.
 - The action preserves existing inline comments across reruns so review threads can be resolved manually; only the summary comment is updated in place after the initial inline review.
 - If Codex returns non-JSON output unexpectedly, the action falls back to treating that output as the summary comment body.
 
 ## Pin Sync Workflow
 
-This repository includes `.github/workflows/sync-action-pins.yml` to keep the pinned `codemod/codex-review-action@<sha>` reference updated in downstream repositories:
+This repository includes `.github/workflows/sync-action-pins.yml` to keep the Codex review integration updated in downstream repositories:
 
 - `codemod/arc-codemods`
 - `codemod/codemod`
 - `codemod/codemod-app`
 
-It runs on pushes to `main` and on manual dispatch. For each target repository, it updates `.github/workflows/codex-pr-review.yml` only when the pinned SHA differs, then opens or updates a draft PR on branch `codex/update-codex-review-action-<short-sha>`.
+It runs on pushes to `main` and on manual dispatch. For each target repository, it:
+
+- updates the `codemod/codex-review-action@<sha>` reference in `.github/workflows/codex-pr-review.yml` when that workflow uses the central action
+- adds or updates `.github/workflows/codex-review-command.yml` from the appropriate template and pins it to the same SHA
+- opens or updates one draft PR on branch `codex/update-codex-review-action-<short-sha>` containing both changes
 
 Required repository secrets for this workflow:
 
