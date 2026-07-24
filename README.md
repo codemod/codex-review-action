@@ -12,7 +12,7 @@ Composite GitHub Action for running [`openai/codex-action`](https://github.com/o
 
 - `action.yml`: composite action entrypoint
 - `examples/codex-review-command.yml`: standard slash-command caller workflow
-- `examples/codex-review-command-arc-codemods.yml`: `arc-codemods` slash-command workflow with repository-specific review settings
+- `examples/codex-review-command-arc-codemods.yml`: `arc-codemods` slash-command dispatcher for its custom Arc review pipeline
 - `.github/codex/review-output-schema.json`: reference copy of the structured Codex output schema
 - `.github/workflows/review.yml`: legacy reusable workflow entrypoint
 

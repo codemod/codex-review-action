@@ -12,38 +12,55 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  codex-review:
+  dispatch-arc-review:
     if: >-
       github.event.issue.pull_request &&
       github.event.comment.body == '/codex-review' &&
       contains(fromJSON('["OWNER","MEMBER"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: read
-      pull-requests: write
       issues: write
     steps:
-      # The sync workflow replaces @main with the target action commit SHA.
-      - uses: codemod/codex-review-action@main
+      - name: Dispatch Arc Generated Codemod PR Review
+        uses: actions/github-script@v9
         with:
-          github_token: ${{ github.token }}
-          pr_number: ${{ github.event.issue.number }}
-          codex_model: ${{ vars.AZURE_OPENAI_CODEX_MODEL }}
-          azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_RESPONSES_ENDPOINT }}
-          node_version: "24"
-          pnpm_version: "10.15.0"
-          install_command: pnpm install --no-frozen-lockfile --ignore-scripts
-          working_directory: .
-          codex_effort: high
-          permission_profile: ":workspace"
-          review_focus: |
-            Focus on:
-            - correctness bugs
-            - behavioral regressions
-            - missing negative or edge-case tests
-            - codemod false positives and false negatives
-            - security gaps in the transformed output
-          extra_prompt: |
-            Follow the repository-specific review guidance in .github/codex/review-instructions.md.
-            Ignore style-only nits and do not review intentionally vulnerable input fixtures as if they were production code.
+          github-token: ${{ github.token }}
+          script: |
+            const issue = context.payload.issue;
+            const comment = context.payload.comment;
+            const allowedAssociations = new Set(["OWNER", "MEMBER"]);
+
+            if (!issue?.pull_request) {
+              core.setFailed("/codex-review can only be used on a pull request");
+              return;
+            }
+            if (String(comment?.body || "") !== "/codex-review") {
+              core.setFailed("The comment did not contain the exact /codex-review command");
+              return;
+            }
+            if (!allowedAssociations.has(comment?.author_association)) {
+              core.setFailed("/codex-review can only be run by a repository owner or organization member");
+              return;
+            }
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "arc-generated-codemod-pr-review.yml",
+              ref: context.payload.repository.default_branch,
+              inputs: {
+                pr_number: String(issue.number),
+                enable_auto_merge: "true",
+                enable_auto_fix: "true",
+                force_auto_fix: "false",
+              },
+            });
+
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: comment.id,
+              content: "eyes",
+            });
