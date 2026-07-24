@@ -20,7 +20,7 @@ jobs:
         include:
           - repo: codemod/arc-codemods
             repo_name: arc-codemods
-            command_workflow_template: examples/codex-review-command-arc-codemods.yml
+            command_workflow_template: ""
           - repo: codemod/codemod
             repo_name: codemod
             command_workflow_template: examples/codex-review-command.yml
@@ -78,14 +78,9 @@ jobs:
         run: |
           review_workflow_path=".github/workflows/codex-pr-review.yml"
           command_workflow_path=".github/workflows/codex-review-command.yml"
-          template_path="$ACTION_SOURCE/$COMMAND_WORKFLOW_TEMPLATE"
 
           if [ ! -f "$review_workflow_path" ]; then
             echo "Expected workflow file not found: $review_workflow_path" >&2
-            exit 1
-          fi
-          if [ ! -f "$template_path" ]; then
-            echo "Command workflow template not found at target SHA: $COMMAND_WORKFLOW_TEMPLATE" >&2
             exit 1
           fi
 
@@ -98,9 +93,19 @@ jobs:
             perl -0pi -e "s/codemod\\/codex-review-action\\@[0-9a-f]{40}/codemod\\/codex-review-action\\@$TARGET_SHA/" "$review_workflow_path"
           fi
 
-          mkdir -p "$(dirname "$command_workflow_path")"
-          cp "$template_path" "$command_workflow_path"
-          perl -0pi -e "s/codemod\\/codex-review-action\\@main/codemod\\/codex-review-action\\@$TARGET_SHA/" "$command_workflow_path"
+          if [ -n "$COMMAND_WORKFLOW_TEMPLATE" ]; then
+            template_path="$ACTION_SOURCE/$COMMAND_WORKFLOW_TEMPLATE"
+            if [ ! -f "$template_path" ]; then
+              echo "Command workflow template not found at target SHA: $COMMAND_WORKFLOW_TEMPLATE" >&2
+              exit 1
+            fi
+
+            mkdir -p "$(dirname "$command_workflow_path")"
+            cp "$template_path" "$command_workflow_path"
+            perl -0pi -e "s/codemod\\/codex-review-action\\@main/codemod\\/codex-review-action\\@$TARGET_SHA/" "$command_workflow_path"
+          else
+            rm -f "$command_workflow_path"
+          fi
 
           if [ -z "$(git status --porcelain -- "$review_workflow_path" "$command_workflow_path")" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -123,7 +128,7 @@ jobs:
             This PR syncs the Codex review integration from [`codemod/codex-review-action`](https://github.com/codemod/codex-review-action):
 
             - updates the pinned action SHA in `.github/workflows/codex-pr-review.yml` when that workflow uses the central action
-            - adds or updates `.github/workflows/codex-review-command.yml` so owners and organization members can trigger a review by commenting `/codex-review` on a PR
+            - syncs the repository-specific `/codex-review` integration for owners and organization members
 
             Target SHA: `${{ steps.resolve.outputs.target_sha }}`
             Previous automatic-review SHA: `${{ steps.update.outputs.current_sha }}`

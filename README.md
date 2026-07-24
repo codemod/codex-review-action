@@ -12,7 +12,6 @@ Composite GitHub Action for running [`openai/codex-action`](https://github.com/o
 
 - `action.yml`: composite action entrypoint
 - `examples/codex-review-command.yml`: standard slash-command caller workflow
-- `examples/codex-review-command-arc-codemods.yml`: `arc-codemods` slash-command dispatcher for its custom Arc review pipeline
 - `.github/codex/review-output-schema.json`: reference copy of the structured Codex output schema
 - `.github/workflows/review.yml`: legacy reusable workflow entrypoint
 
@@ -87,7 +86,7 @@ jobs:
 
 ## `/codex-review` slash command
 
-GitHub event triggers belong to the consumer repository, so a composite action cannot register a slash command by itself. The pin-sync workflow described below automatically adds `.github/workflows/codex-review-command.yml` to the three managed consumer repositories. For another consumer repository, copy [`examples/codex-review-command.yml`](examples/codex-review-command.yml) there manually.
+GitHub event triggers belong to the consumer repository, so a composite action cannot register a slash command by itself. The pin-sync workflow described below automatically adds `.github/workflows/codex-review-command.yml` to the standard managed consumer repositories. `arc-codemods` handles the same command directly in its custom Arc review workflow so the commenter remains the workflow actor. For another consumer repository, copy [`examples/codex-review-command.yml`](examples/codex-review-command.yml) there manually.
 
 Once that workflow is present on the consumer repository's default branch, a repository owner or organization member can add this exact PR comment:
 
@@ -170,7 +169,8 @@ This repository includes `.github/workflows/sync-action-pins.yml` to keep the Co
 It runs on pushes to `main` and on manual dispatch. For each target repository, it:
 
 - updates the `codemod/codex-review-action@<sha>` reference in `.github/workflows/codex-pr-review.yml` when that workflow uses the central action
-- adds or updates `.github/workflows/codex-review-command.yml` from the appropriate template and pins it to the same SHA
+- adds or updates `.github/workflows/codex-review-command.yml` from the standard template in `codemod` and `codemod-app`, and pins it to the same SHA
+- removes the legacy ARC dispatcher from `arc-codemods`, whose custom Arc review workflow handles `/codex-review` directly
 - opens or updates one draft PR on branch `codex/update-codex-review-action-<short-sha>` containing both changes
 
 Required repository secrets for this workflow:
