@@ -372,7 +372,9 @@ runs:
     - name: Run Codex review
       id: run_codex_permission
       if: ${{ inputs.permission_profile != '' }}
-      uses: openai/codex-action@v1
+      # Pin before the runner hardening regression that can break systemd-resolved:
+      # https://github.com/openai/codex-action/issues/160
+      uses: openai/codex-action@c385816875cc2fc8e033ed9d1cba96f8c331210e
       with:
         openai-api-key: ${{ inputs.azure_openai_api_key }}
         responses-api-endpoint: ${{ inputs.azure_openai_responses_endpoint }}
@@ -387,7 +389,8 @@ runs:
     - name: Run Codex review
       id: run_codex_sandbox
       if: ${{ inputs.permission_profile == '' }}
-      uses: openai/codex-action@v1
+      # Keep both execution paths on the same known-good revision.
+      uses: openai/codex-action@c385816875cc2fc8e033ed9d1cba96f8c331210e
       with:
         openai-api-key: ${{ inputs.azure_openai_api_key }}
         responses-api-endpoint: ${{ inputs.azure_openai_responses_endpoint }}
@@ -483,6 +486,7 @@ runs:
         PR_EVENT_ACTION: ${{ steps.resolve.outputs.event_action }}
       with:
         github-token: ${{ inputs.github_token }}
+        retries: 3
         script: |
           const crypto = require("node:crypto");
 
