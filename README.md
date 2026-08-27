@@ -158,6 +158,7 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 - The action posts inline comments for `/codex-review` command runs, initial PR review events (`opened`, `reopened`, `ready_for_review`), and manual `workflow_dispatch` reruns; `synchronize` reruns update only the summary comment to avoid repeated inline comment spam.
 - The action preserves existing inline comments across reruns so review threads can be resolved manually; only the summary comment is updated in place after the initial inline review.
 - If Codex returns non-JSON output unexpectedly, the action falls back to treating that output as the summary comment body.
+- The OpenAI action is pinned before the runner DNS regression tracked in [`openai/codex-action#160`](https://github.com/openai/codex-action/issues/160), and transient GitHub API failures during review posting are retried up to three times.
 
 ## Pin Sync Workflow
 
