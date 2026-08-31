@@ -101,6 +101,7 @@ jobs:
           mkdir -p "$(dirname "$command_workflow_path")"
           cp "$template_path" "$command_workflow_path"
           perl -0pi -e "s/codemod\\/codex-review-action\\@main/codemod\\/codex-review-action\\@$TARGET_SHA/" "$command_workflow_path"
+          perl -0pi -e "s/codemod\\/codex-review-action\\/\\.github\\/workflows\\/fork-review\\.yml\\@main/codemod\\/codex-review-action\\/\\.github\\/workflows\\/fork-review.yml\\@$TARGET_SHA/" "$command_workflow_path"
 
           if [ -z "$(git status --porcelain -- "$review_workflow_path" "$command_workflow_path")" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -124,6 +125,7 @@ jobs:
 
             - updates the pinned action SHA in `.github/workflows/codex-pr-review.yml` when that workflow uses the central action
             - adds or updates `.github/workflows/codex-review-command.yml` so owners and organization members can trigger a review by commenting `/codex-review` on a PR
+            - pins the fork-safe reusable workflow used for maintainer-triggered reviews of fork pull requests
 
             Target SHA: `${{ steps.resolve.outputs.target_sha }}`
             Previous automatic-review SHA: `${{ steps.update.outputs.current_sha }}`
