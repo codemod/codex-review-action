@@ -6,11 +6,13 @@ Composite GitHub Action for running [`openai/codex-action`](https://github.com/o
 - PR summary comment upsert
 - inline review comments when findings can be anchored to the diff
 - `/codex-review` PR comment trigger for repository owners and organization members
+- maintainer-triggered, patch-only reviews for pull requests from forks
 - reusable central review logic for multiple repositories
 
 ## Files
 
 - `action.yml`: composite action entrypoint
+- `.github/workflows/fork-review.yml`: fork-safe reusable workflow with separate analysis and posting jobs
 - `examples/codex-review-command.yml`: standard slash-command caller workflow
 - `examples/codex-review-command-arc-codemods.yml`: `arc-codemods` slash-command workflow with repository-specific review settings
 - `.github/codex/review-output-schema.json`: reference copy of the structured Codex output schema
@@ -101,32 +103,41 @@ The workflow intentionally:
 - accepts only the exact `/codex-review` comment
 - accepts only GitHub `OWNER` and `MEMBER` author associations
 - refuses draft PRs
-- refuses fork PRs before checking out or running code with repository secrets
+- routes same-repository PRs through the existing full-checkout review
+- routes fork PRs through the patch-only reusable workflow
 - allows inline review comments for command-triggered reviews
 - serializes reviews for the same PR so repeated commands do not overlap
 
-The caller-level `if` avoids starting runners for unrelated comments. The action repeats the authorization, draft, and same-repository checks as defense in depth.
+The caller-level `if` avoids starting runners for unrelated comments. The composite action and fork reusable workflow repeat their applicable authorization and trust checks as defense in depth.
 
 Pin `codemod/codex-review-action` to a full commit SHA in production rather than leaving the example's `@main` reference in place.
 
 ## Security model
 
-The shared action is meant to run only in caller jobs that already enforce same-repo execution when secrets are present.
+The composite action remains restricted to trusted same-repository pull requests whenever it checks out code, installs dependencies, and runs Codex with repository secrets.
 
-For `issue_comment` events, the action also enforces the exact `/codex-review` command, `OWNER` or `MEMBER` association, non-draft status, and same-repository head before checkout.
+The command workflow resolves the PR before selecting one of two paths:
 
-Recommended caller guard:
+- Same-repository PRs use the composite action and retain dependency installation plus full-checkout inspection.
+- Fork PRs use `.github/workflows/fork-review.yml` only after an `OWNER` or `MEMBER` posts the exact `/codex-review` command.
 
-- check whether `pr.head.repo.full_name == github.repository`
-- skip secret-bearing review jobs for fork PRs
+The fork workflow deliberately does not execute fork-controlled code:
+
+- it checks out the trusted base commit, never the fork head
+- it downloads the pull request diff through the GitHub API and stores it as read-only review data
+- it does not install dependencies, run builds or tests, load fork-controlled Codex configuration, or execute repository scripts
+- it runs Codex with `permission-profile: ":read-only"` and `safety-strategy: "drop-sudo"`
+- Codex is the final step in the Azure-secret-bearing job
+- a fresh job with no Azure credential and no checkout validates the structured result and posts the review
+
+Normal `pull_request` CI for forks can continue installing dependencies and running tests under GitHub's secure defaults, which withhold repository secrets and supply a read-only token. Do not pass those jobs secrets or a write-capable token, and do not reuse their runner or executable artifacts in the fork review workflow.
 
 That means:
 
-- automatic same-repo PR review: supported
-- manual same-repo PR rerun by PR number: supported
-- manual fork review with repository secrets: intentionally blocked
-
-This is deliberate. Running fork code in a secret-bearing job is a real secret-exfiltration risk.
+- automatic same-repository PR review: supported
+- manual same-repository review through `/codex-review`: supported
+- manual fork review through `/codex-review`: supported through the patch-only path
+- automatic fork review: intentionally not configured
 
 ## Inputs
 
@@ -151,6 +162,7 @@ This is deliberate. Running fork code in a secret-bearing job is a real secret-e
 ## Notes
 
 - The action expects `pnpm` by default, but the caller can override `install_command`, `node_version`, `pnpm_version`, and `working_directory`.
+- Fork reviews ignore dependency-installation inputs because no fork-controlled code is executed in the secret-bearing workflow.
 - The action generates its output schema at runtime so callers do not need to copy schema files into their own repositories.
 - The action precomputes the PR diff stat, changed files, and a bounded patch snapshot before invoking Codex so the model has review context immediately and can still inspect the checkout for deeper analysis.
 - If Codex returns a meta-response claiming it cannot inspect the PR diff, the action fails closed instead of posting that response as a PR review.
@@ -171,7 +183,7 @@ This repository includes `.github/workflows/sync-action-pins.yml` to keep the Co
 It runs on pushes to `main` and on manual dispatch. For each target repository, it:
 
 - updates the `codemod/codex-review-action@<sha>` reference in `.github/workflows/codex-pr-review.yml` when that workflow uses the central action
-- adds or updates `.github/workflows/codex-review-command.yml` from the appropriate template and pins it to the same SHA
+- adds or updates `.github/workflows/codex-review-command.yml` from the appropriate template and pins both the composite action and fork reusable workflow to the same SHA
 - opens or updates one draft PR on branch `codex/update-codex-review-action-<short-sha>` containing both changes
 
 Required repository secrets for this workflow:
