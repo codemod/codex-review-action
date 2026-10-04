@@ -125,10 +125,15 @@ The fork workflow deliberately does not execute fork-controlled code:
 
 - it checks out the trusted base commit, never the fork head
 - it downloads the pull request diff through the GitHub API and stores it as read-only review data
+- the diff, file list, and inline comment locations use the authorized base/head commit SHAs, never a moving PR ref
+- it refuses comparisons with 300 or more files because GitHub may truncate their file list
 - it does not install dependencies, run builds or tests, load fork-controlled Codex configuration, or execute repository scripts
 - it runs Codex with `permission-profile: ":read-only"` and `safety-strategy: "drop-sudo"`
 - Codex is the final step in the Azure-secret-bearing job
 - a fresh job with no Azure credential and no checkout validates the structured result and posts the review
+- results claiming the diff could not be inspected without any anchored findings fail before posting
+
+The fork workflow pins both the Codex CLI and Responses API proxy to `0.160.0` by default. Its `codex_version` override must be an exact stable version (`X.Y.Z`); empty values, tags, and version ranges are rejected.
 
 Normal `pull_request` CI for forks can continue installing dependencies and running tests under GitHub's secure defaults, which withhold repository secrets and supply a read-only token. Do not pass those jobs secrets or a write-capable token, and do not reuse their runner or executable artifacts in the fork review workflow.
 
@@ -153,7 +158,7 @@ That means:
 - `codex_effort`: Codex effort level
 - `sandbox`: legacy Codex sandbox mode, used only when `permission_profile` is empty
 - `permission_profile`: Codex permission profile, default `:workspace`
-- `codex_version`: optional Codex CLI version passed through to `openai/codex-action`
+- `codex_version`: optional Codex CLI version passed through to `openai/codex-action`; the fork workflow defaults to `0.160.0` and requires an exact stable version
 - `review_focus`: extra review criteria inserted into the prompt
 - `extra_prompt`: extra prompt text appended after the standard review instructions
 

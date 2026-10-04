@@ -22,9 +22,9 @@ on:
         default: "high"
         type: string
       codex_version:
-        description: Optional Codex CLI version passed through to openai/codex-action
+        description: Exact stable version of the Codex CLI and Responses API proxy
         required: false
-        default: ""
+        default: "0.160.0"
         type: string
       review_focus:
         description: Additional review focus instructions
@@ -138,7 +138,13 @@ jobs:
           AZURE_OPENAI_API_KEY: ${{ secrets.azure_openai_api_key }}
           AZURE_OPENAI_RESPONSES_ENDPOINT: ${{ secrets.azure_openai_responses_endpoint }}
           AZURE_OPENAI_CODEX_MODEL: ${{ inputs.codex_model }}
+          CODEX_VERSION: ${{ inputs.codex_version }}
         run: |
+          if ! [[ "$CODEX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "codex_version must be an exact stable version, such as 0.160.0" >&2
+            exit 1
+          fi
+
           missing=()
 
           [ -n "$AZURE_OPENAI_API_KEY" ] || missing+=("secret azure_openai_api_key")
@@ -187,16 +193,27 @@ jobs:
               return;
             }
 
-            const files = await github.paginate(github.rest.pulls.listFiles, {
+            // Both responses must describe the authorized commits, even if the
+            // contributor pushes and resets the branch while requests are in flight.
+            const comparison = {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: prNumber,
-              per_page: 100,
+              basehead: `${process.env.EXPECTED_BASE_SHA}...${process.env.EXPECTED_HEAD_SHA}`,
+            };
+            const { data: comparisonData } = await github.rest.repos.compareCommitsWithBasehead({
+              ...comparison,
+              per_page: 1,
+              page: 1,
             });
-            const diffResponse = await github.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
+            // GitHub caps comparison files at 300, even when commits are paginated.
+            // Refuse a potentially incomplete file list instead of claiming full coverage.
+            const files = comparisonData.files;
+            if (!Array.isArray(files) || files.length >= 300) {
+              core.setFailed("The immutable comparison file list is missing or may be truncated (300-file limit)");
+              return;
+            }
+            const diffResponse = await github.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+              ...comparison,
               headers: { accept: "application/vnd.github.v3.diff" },
             });
             if (typeof diffResponse.data !== "string") {
@@ -326,6 +343,7 @@ jobs:
     if: ${{ needs.codex-review.result == 'success' && needs.codex-review.outputs.final_message != '' }}
     runs-on: ubuntu-latest
     permissions:
+      contents: read # Read the immutable comparison for inline comment locations.
       issues: write # Upsert the summary comment from this fresh job.
       pull-requests: write # Post inline review comments from this fresh job.
     steps:
@@ -335,6 +353,7 @@ jobs:
           CODEX_FINAL_MESSAGE: ${{ needs.codex-review.outputs.final_message }}
           PR_NUMBER: ${{ needs.resolve-pr.outputs.pr_number }}
           PR_HEAD_SHA: ${{ needs.resolve-pr.outputs.head_sha }}
+          PR_BASE_SHA: ${{ needs.resolve-pr.outputs.base_sha }}
         with:
           github-token: ${{ github.token }}
           retries: 3
@@ -345,6 +364,7 @@ jobs:
             const repo = context.repo.repo;
             const pull_number = Number(process.env.PR_NUMBER);
             const commit_id = process.env.PR_HEAD_SHA;
+            const base_sha = process.env.PR_BASE_SHA;
             const raw = process.env.CODEX_FINAL_MESSAGE || "";
             const summaryMarker = "<!-- codex-review-summary -->";
             const severityOrder = { high: 0, medium: 1, low: 2 };
@@ -366,12 +386,35 @@ jobs:
               return;
             }
 
+            const text = [
+              review.summary,
+              ...review.findings.flatMap((finding) => [finding?.title, finding?.body]),
+            ].filter(Boolean).join("\n").toLowerCase();
+            const claimsMissingDiff =
+              text.includes("unable to inspect") ||
+              text.includes("couldn’t inspect") ||
+              text.includes("could not inspect") ||
+              text.includes("cannot inspect") ||
+              text.includes("don't have the actual changed files") ||
+              text.includes("do not have the actual changed files") ||
+              text.includes("need to inspect the repository diff") ||
+              text.includes("provide the diff output");
+            const hasAnchoredFinding = review.findings.some((finding) => {
+              const path = String(finding?.path || "").trim();
+              const line = Number(finding?.line || 0);
+              return path !== "" && Number.isFinite(line) && line > 0;
+            });
+            if (claimsMissingDiff && !hasAnchoredFinding) {
+              core.setFailed("Codex did not inspect the supplied diff; refusing to post a non-review");
+              return;
+            }
+
             const { data: currentPr } = await github.rest.pulls.get({
               owner,
               repo,
               pull_number,
             });
-            if (currentPr.head.sha !== commit_id) {
+            if (currentPr.head.sha !== commit_id || currentPr.base.sha !== base_sha) {
               core.setFailed("The pull request changed during review; run /codex-review again");
               return;
             }
@@ -429,12 +472,18 @@ jobs:
                 return severityDelta || `${a.path}:${a.line}:${a.title}`.localeCompare(`${b.path}:${b.line}:${b.title}`);
               });
 
-            const files = await github.paginate(github.rest.pulls.listFiles, {
+            const { data: comparisonData } = await github.rest.repos.compareCommitsWithBasehead({
               owner,
               repo,
-              pull_number,
-              per_page: 100,
+              basehead: `${base_sha}...${commit_id}`,
+              per_page: 1,
+              page: 1,
             });
+            const files = comparisonData.files;
+            if (!Array.isArray(files) || files.length >= 300) {
+              core.setFailed("The immutable comparison file list is missing or may be truncated (300-file limit)");
+              return;
+            }
             const reviewComments = await github.paginate(github.rest.pulls.listReviewComments, {
               owner,
               repo,
