@@ -61,7 +61,8 @@ jobs:
           azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
           azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_RESPONSES_ENDPOINT }}
           node_version: "24"
-          pnpm_version: "10.19.0"
+          # Read pnpm from the reviewed checkout's packageManager field.
+          pnpm_version: ""
           install_command: pnpm install --frozen-lockfile
           working_directory: .
           codex_effort: high
