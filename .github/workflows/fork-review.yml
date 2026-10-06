@@ -71,7 +71,6 @@ jobs:
           github-token: ${{ github.token }}
           retries: 3
           script: |
-            const allowedAssociations = new Set(["OWNER", "MEMBER"]);
             const issue = context.payload.issue;
             const comment = context.payload.comment;
             const prNumber = Number(process.env.PR_NUMBER);
@@ -84,8 +83,25 @@ jobs:
               core.setFailed("The issue_comment event did not contain the exact /codex-review command");
               return;
             }
-            if (!allowedAssociations.has(comment?.author_association)) {
-              core.setFailed("/codex-review can only be run by a repository owner or organization member");
+            const commandAuthor = context.payload.comment?.user?.login;
+            if (!commandAuthor) {
+              core.setFailed("Cannot verify the /codex-review comment author");
+              return;
+            }
+            let permission;
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: commandAuthor,
+              });
+              permission = data.permission;
+            } catch (error) {
+              core.setFailed("Could not verify repository access for /codex-review; refusing to run");
+              return;
+            }
+            if (!["write", "maintain", "admin"].includes(permission)) {
+              core.setFailed("/codex-review requires write, maintain, or admin access to this repository");
               return;
             }
             if (!Number.isFinite(prNumber) || prNumber !== Number(issue.number)) {

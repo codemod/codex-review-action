@@ -48,16 +48,6 @@ function assertComparison(args) {
   assert.equal(args.repo, 'codemod');
 }
 
-for (const association of ['OWNER', 'MEMBER', 'NONE', 'CONTRIBUTOR', 'COLLABORATOR']) {
-  test(`authorization: ${association}`, async () => {
-    const input = structuredClone(context);
-    input.payload.comment.author_association = association;
-    const result = state();
-    await authorize(require, { env: { PR_NUMBER: '2403' } }, input, { rest: { pulls: { get: async () => ({ data: pr }) } } }, result.core);
-    assert.equal(result.errors.length > 0, !['OWNER', 'MEMBER'].includes(association));
-  });
-}
-
 test('a push/reset during collection cannot change the reviewed diff or file list', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fork-review-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

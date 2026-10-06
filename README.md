@@ -5,7 +5,7 @@ Composite GitHub Action for running [`openai/codex-action`](https://github.com/o
 - Azure OpenAI support
 - PR summary comment upsert
 - inline review comments when findings can be anchored to the diff
-- `/codex-review` PR comment trigger for repository owners and organization members
+- `/codex-review` PR comment trigger for users with repository write access
 - maintainer-triggered, patch-only reviews for pull requests from forks
 - reusable central review logic for multiple repositories
 
@@ -91,7 +91,7 @@ jobs:
 
 GitHub event triggers belong to the consumer repository, so a composite action cannot register a slash command by itself. The pin-sync workflow described below automatically adds `.github/workflows/codex-review-command.yml` to the three managed consumer repositories. For another consumer repository, copy [`examples/codex-review-command.yml`](examples/codex-review-command.yml) there manually.
 
-Once that workflow is present on the consumer repository's default branch, a repository owner or organization member can add this exact PR comment:
+Once that workflow is present on the consumer repository's default branch, a user with write, maintain, or admin repository access (including an outside collaborator) can add this exact PR comment:
 
 ```text
 /codex-review
@@ -101,7 +101,8 @@ The workflow intentionally:
 
 - listens only for newly created PR comments
 - accepts only the exact `/codex-review` comment
-- accepts only GitHub `OWNER` and `MEMBER` author associations
+- verifies the comment author has write, maintain, or admin repository access through the GitHub API; author association alone does not grant access
+- acknowledges authorized commands with 👀; reaction failures warn without blocking the review
 - refuses draft PRs
 - routes same-repository PRs through the existing full-checkout review
 - routes fork PRs through the patch-only reusable workflow
@@ -119,7 +120,7 @@ The composite action remains restricted to trusted same-repository pull requests
 The command workflow resolves the PR before selecting one of two paths:
 
 - Same-repository PRs use the composite action and retain dependency installation plus full-checkout inspection.
-- Fork PRs use `.github/workflows/fork-review.yml` only after an `OWNER` or `MEMBER` posts the exact `/codex-review` command.
+- Fork PRs use `.github/workflows/fork-review.yml` only after a user with verified repository write access posts the exact `/codex-review` command.
 
 The fork workflow deliberately does not execute fork-controlled code:
 
