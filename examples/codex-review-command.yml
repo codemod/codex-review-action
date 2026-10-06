@@ -18,16 +18,43 @@ jobs:
     name: Resolve pull request
     if: >-
       github.event.issue.pull_request &&
-      github.event.comment.body == '/codex-review' &&
-      contains(fromJSON('["OWNER","MEMBER"]'), github.event.comment.author_association)
+      github.event.comment.body == '/codex-review'
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: read # Route trusted and fork reviews using PR metadata.
+      pull-requests: write # Read PR metadata and react to PR conversation comments.
       issues: write # Acknowledge the command comment with a reaction.
     outputs:
       is_draft: ${{ steps.resolve.outputs.is_draft }}
       is_fork: ${{ steps.resolve.outputs.is_fork }}
     steps:
+      - name: Authorize command
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          github-token: ${{ github.token }}
+          retries: 3
+          script: |
+            const commandAuthor = context.payload.comment?.user?.login;
+            if (!commandAuthor) {
+              core.setFailed("Cannot verify the /codex-review comment author");
+              return;
+            }
+            let permission;
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: commandAuthor,
+              });
+              permission = data.permission;
+            } catch (error) {
+              core.setFailed("Could not verify repository access for /codex-review; refusing to run");
+              return;
+            }
+            if (!["write", "maintain", "admin"].includes(permission)) {
+              core.setFailed("/codex-review requires write, maintain, or admin access to this repository");
+              return;
+            }
+
       - name: Acknowledge command
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
