@@ -27,6 +27,9 @@ jobs:
           - repo: codemod/codemod-app
             repo_name: codemod-app
             command_workflow_template: examples/codex-review-command.yml
+          - repo: codemod/react-codemod
+            repo_name: react-codemod
+            command_workflow_template: examples/codex-review-command.yml
     permissions:
       contents: read
     steps:
