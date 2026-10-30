@@ -23,7 +23,7 @@ Composite GitHub Action for running [`openai/codex-action`](https://github.com/o
 In the calling repository, configure:
 
 - Secret: `AZURE_OPENAI_API_KEY`
-- Secret: `AZURE_OPENAI_RESPONSES_ENDPOINT`
+- Secret: `AZURE_OPENAI_ENDPOINT`
 - A model/deployment name to pass as `codex_model`
 
 For Azure, the endpoint must be the full Responses API URL, for example:
@@ -31,6 +31,17 @@ For Azure, the endpoint must be the full Responses API URL, for example:
 ```text
 https://centralus.api.cognitive.microsoft.com/openai/v1/responses
 ```
+
+### Breaking change: endpoint secret / input rename
+
+Callers must rename the repository secret and any action/workflow inputs that still use the old names:
+
+| Old | New |
+| --- | --- |
+| Secret `AZURE_OPENAI_RESPONSES_ENDPOINT` | `AZURE_OPENAI_ENDPOINT` |
+| Input / reusable-workflow secret `azure_openai_responses_endpoint` | `azure_openai_endpoint` |
+
+The value is unchanged (still the full Azure OpenAI Responses API URL). Downstream workflows that pass the old input or secret name will fail validation until updated.
 
 ## Recommended caller workflow
 
@@ -70,7 +81,7 @@ jobs:
           pr_number: ${{ github.event.pull_request.number }}
           codex_model: ${{ vars.AZURE_OPENAI_CODEX_MODEL }}
           azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_RESPONSES_ENDPOINT }}
+          azure_openai_endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           node_version: "24"
           pnpm_version: "10.19.0"
           install_command: pnpm install --frozen-lockfile
@@ -151,7 +162,7 @@ That means:
 - `pr_number`: required PR number to review
 - `codex_model`: required Azure deployment name
 - `azure_openai_api_key`: required Azure OpenAI API key
-- `azure_openai_responses_endpoint`: required Azure OpenAI Responses API endpoint
+- `azure_openai_endpoint`: required Azure OpenAI Responses API endpoint
 - `working_directory`: checkout subdirectory to run from
 - `node_version`: Node.js version for `actions/setup-node`
 - `pnpm_version`: pnpm version for `pnpm/action-setup`
@@ -164,6 +175,11 @@ That means:
 - `extra_prompt`: extra prompt text appended after the standard review instructions
 
 ## Secrets
+
+When calling the composite action, pass the Azure credentials as inputs (`azure_openai_api_key`, `azure_openai_endpoint`). When calling the reusable workflows (`.github/workflows/fork-review.yml`, `.github/workflows/review.yml`), map repository secrets into:
+
+- `azure_openai_api_key` ← repository secret `AZURE_OPENAI_API_KEY`
+- `azure_openai_endpoint` ← repository secret `AZURE_OPENAI_ENDPOINT`
 
 ## Notes
 
