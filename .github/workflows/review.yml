@@ -59,7 +59,7 @@ on:
     secrets:
       azure_openai_api_key:
         required: true
-      azure_openai_responses_endpoint:
+      azure_openai_endpoint:
         required: true
 
 jobs:
@@ -158,13 +158,13 @@ jobs:
       - name: Validate Azure OpenAI configuration
         env:
           AZURE_OPENAI_API_KEY: ${{ secrets.azure_openai_api_key }}
-          AZURE_OPENAI_RESPONSES_ENDPOINT: ${{ secrets.azure_openai_responses_endpoint }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.azure_openai_endpoint }}
           AZURE_OPENAI_CODEX_MODEL: ${{ inputs.codex_model }}
         run: |
           missing=()
 
           [ -n "$AZURE_OPENAI_API_KEY" ] || missing+=("secret azure_openai_api_key")
-          [ -n "$AZURE_OPENAI_RESPONSES_ENDPOINT" ] || missing+=("secret azure_openai_responses_endpoint")
+          [ -n "$AZURE_OPENAI_ENDPOINT" ] || missing+=("secret azure_openai_endpoint")
           [ -n "$AZURE_OPENAI_CODEX_MODEL" ] || missing+=("input codex_model")
 
           if [ ${#missing[@]} -gt 0 ]; then
@@ -178,7 +178,7 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.azure_openai_api_key }}
-          responses-api-endpoint: ${{ secrets.azure_openai_responses_endpoint }}
+          responses-api-endpoint: ${{ secrets.azure_openai_endpoint }}
           model: ${{ inputs.codex_model }}
           effort: ${{ inputs.codex_effort }}
           sandbox: ${{ inputs.sandbox }}
