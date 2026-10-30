@@ -104,7 +104,7 @@ jobs:
           pr_number: ${{ github.event.issue.number }}
           codex_model: ${{ vars.AZURE_OPENAI_CODEX_MODEL }}
           azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_RESPONSES_ENDPOINT }}
+          azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           node_version: "24"
           pnpm_version: "10.15.0"
           install_command: pnpm install --no-frozen-lockfile --ignore-scripts
@@ -149,4 +149,4 @@ jobs:
         Ignore style-only nits and do not review intentionally vulnerable input fixtures as if they were production code.
     secrets:
       azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
-      azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_RESPONSES_ENDPOINT }}
+      azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
