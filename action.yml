@@ -209,13 +209,13 @@ runs:
       shell: bash
       env:
         AZURE_OPENAI_API_KEY: ${{ inputs.azure_openai_api_key }}
-        AZURE_OPENAI_ENDPOINT: ${{ inputs.azure_openai_responses_endpoint }}
+        AZURE_OPENAI_RESPONSES_ENDPOINT: ${{ inputs.azure_openai_responses_endpoint }}
         AZURE_OPENAI_CODEX_MODEL: ${{ inputs.codex_model }}
       run: |
         missing=()
 
         [ -n "$AZURE_OPENAI_API_KEY" ] || missing+=("input azure_openai_api_key")
-        [ -n "$AZURE_OPENAI_ENDPOINT" ] || missing+=("input azure_openai_responses_endpoint")
+        [ -n "$AZURE_OPENAI_RESPONSES_ENDPOINT" ] || missing+=("input azure_openai_responses_endpoint")
         [ -n "$AZURE_OPENAI_CODEX_MODEL" ] || missing+=("input codex_model")
 
         if [ ${#missing[@]} -gt 0 ]; then

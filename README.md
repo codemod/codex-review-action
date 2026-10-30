@@ -23,7 +23,7 @@ Composite GitHub Action for running [`openai/codex-action`](https://github.com/o
 In the calling repository, configure:
 
 - Secret: `AZURE_OPENAI_API_KEY`
-- Secret: `AZURE_OPENAI_ENDPOINT`
+- Secret: `AZURE_OPENAI_RESPONSES_ENDPOINT`
 - A model/deployment name to pass as `codex_model`
 
 For Azure, the endpoint must be the full Responses API URL, for example:
@@ -70,7 +70,7 @@ jobs:
           pr_number: ${{ github.event.pull_request.number }}
           codex_model: ${{ vars.AZURE_OPENAI_CODEX_MODEL }}
           azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
-          azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          azure_openai_responses_endpoint: ${{ secrets.AZURE_OPENAI_RESPONSES_ENDPOINT }}
           node_version: "24"
           pnpm_version: "10.19.0"
           install_command: pnpm install --frozen-lockfile
