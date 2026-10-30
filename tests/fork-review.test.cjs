@@ -191,7 +191,7 @@ test('runtime version validation accepts only exact stable versions', () => {
   for (const version of ['0.160.0', '1.2.3', '', 'latest', '^0.160.0', '0.160.0 || touch marker']) {
     const result = spawnSync('bash', ['-c', validation], { encoding: 'utf8', env: {
       PATH: process.env.PATH, CODEX_VERSION: version,
-      AZURE_OPENAI_API_KEY: 'fake', AZURE_OPENAI_RESPONSES_ENDPOINT: 'fake', AZURE_OPENAI_CODEX_MODEL: 'fake',
+      AZURE_OPENAI_API_KEY: 'fake', AZURE_OPENAI_ENDPOINT: 'fake', AZURE_OPENAI_CODEX_MODEL: 'fake',
     } });
     assert.equal(result.status === 0, ['0.160.0', '1.2.3'].includes(version), version);
   }
