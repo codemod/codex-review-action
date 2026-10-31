@@ -15,7 +15,7 @@ inputs:
     description: Azure OpenAI API key.
     required: true
   azure_openai_endpoint:
-    description: Azure OpenAI endpoint (full Responses API URL).
+    description: Azure OpenAI endpoint (resource root or full Responses API URL).
     required: true
   working_directory:
     description: Working directory inside the repository checkout.
@@ -224,6 +224,13 @@ runs:
           exit 1
         fi
 
+    - name: Normalize Azure OpenAI endpoint
+      id: normalize_azure_endpoint
+      shell: bash
+      env:
+        AZURE_OPENAI_ENDPOINT: ${{ inputs.azure_openai_endpoint }}
+      run: node "${{ github.action_path }}/scripts/normalize-azure-openai-endpoint.cjs"
+
     - name: Prepare Codex review prompt
       id: review_files
       shell: bash
@@ -393,7 +400,7 @@ runs:
       uses: openai/codex-action@c385816875cc2fc8e033ed9d1cba96f8c331210e
       with:
         openai-api-key: ${{ inputs.azure_openai_api_key }}
-        responses-api-endpoint: ${{ inputs.azure_openai_endpoint }}
+        responses-api-endpoint: ${{ steps.normalize_azure_endpoint.outputs.endpoint }}
         model: ${{ inputs.codex_model }}
         effort: ${{ inputs.codex_effort }}
         permission-profile: ${{ inputs.permission_profile }}
@@ -409,7 +416,7 @@ runs:
       uses: openai/codex-action@c385816875cc2fc8e033ed9d1cba96f8c331210e
       with:
         openai-api-key: ${{ inputs.azure_openai_api_key }}
-        responses-api-endpoint: ${{ inputs.azure_openai_endpoint }}
+        responses-api-endpoint: ${{ steps.normalize_azure_endpoint.outputs.endpoint }}
         model: ${{ inputs.codex_model }}
         effort: ${{ inputs.codex_effort }}
         sandbox: ${{ inputs.sandbox }}
