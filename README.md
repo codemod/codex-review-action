@@ -206,6 +206,7 @@ This repository includes `.github/workflows/sync-action-pins.yml` to keep the Co
 - `codemod/arc-codemods`
 - `codemod/codemod`
 - `codemod/codemod-app`
+- `codemod/react-codemod`
 
 It runs on pushes to `main` and on manual dispatch. For each target repository, it:
 
