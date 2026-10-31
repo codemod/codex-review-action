@@ -173,13 +173,15 @@ jobs:
             exit 1
           fi
 
-      # Sparse-checkout of this action repo at the reusable-workflow SHA so the
+      # Sparse-checkout of this action repo at the called reusable-workflow SHA so the
       # shared normalizer stays in sync without embedding a second copy here.
+      # Use job.workflow_* (not github.workflow_sha): github.workflow_sha is the caller
+      # commit, which is not a ref in codemod/codex-review-action.
       - name: Checkout Azure endpoint normalizer
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          repository: codemod/codex-review-action
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           sparse-checkout: |
             scripts/normalize-azure-openai-endpoint.cjs
           sparse-checkout-cone-mode: false

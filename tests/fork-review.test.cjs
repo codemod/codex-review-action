@@ -197,3 +197,12 @@ test('runtime version validation accepts only exact stable versions', () => {
   }
   assert.match(workflow, /codex_version:[\s\S]*?default: "0\.160\.0"/);
 });
+
+test('Azure endpoint normalizer checks out the called reusable workflow, not the caller SHA', () => {
+  const step = workflow.split('- name: Checkout Azure endpoint normalizer\n')[1];
+  assert(step, 'Missing Checkout Azure endpoint normalizer step');
+  const block = step.split('\n').slice(0, 20).join('\n');
+  assert.match(block, /repository:\s*\$\{\{\s*job\.workflow_repository\s*\}\}/);
+  assert.match(block, /ref:\s*\$\{\{\s*job\.workflow_sha\s*\}\}/);
+  assert.doesNotMatch(block, /github\.workflow_sha/);
+});
