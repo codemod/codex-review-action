@@ -173,6 +173,26 @@ jobs:
             exit 1
           fi
 
+      # Sparse-checkout of this action repo at the reusable-workflow SHA so the
+      # shared normalizer stays in sync without embedding a second copy here.
+      - name: Checkout Azure endpoint normalizer
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: codemod/codex-review-action
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: |
+            scripts/normalize-azure-openai-endpoint.cjs
+          sparse-checkout-cone-mode: false
+          path: .codex-review-action
+          persist-credentials: false
+
+      - name: Normalize Azure OpenAI endpoint
+        id: normalize_azure_endpoint
+        shell: bash
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.azure_openai_endpoint }}
+        run: node .codex-review-action/scripts/normalize-azure-openai-endpoint.cjs
+
       - name: Prepare fork diff as untrusted review data
         id: review-files
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
@@ -340,7 +360,7 @@ jobs:
         uses: openai/codex-action@c385816875cc2fc8e033ed9d1cba96f8c331210e
         with:
           openai-api-key: ${{ secrets.azure_openai_api_key }}
-          responses-api-endpoint: ${{ secrets.azure_openai_endpoint }}
+          responses-api-endpoint: ${{ steps.normalize_azure_endpoint.outputs.endpoint }}
           model: ${{ inputs.codex_model }}
           effort: ${{ inputs.codex_effort }}
           permission-profile: ":read-only"

@@ -26,11 +26,16 @@ In the calling repository, configure:
 - Secret: `AZURE_OPENAI_ENDPOINT`
 - A model/deployment name to pass as `codex_model`
 
-For Azure, the endpoint must be the full Responses API URL, for example:
+For Azure, `AZURE_OPENAI_ENDPOINT` may be either:
+
+- the Azure resource root used by other app callers, for example `https://example.openai.azure.com`
+- or the full Responses API URL, for example:
 
 ```text
 https://centralus.api.cognitive.microsoft.com/openai/v1/responses
 ```
+
+The action and reusable workflows normalize resource-root and `/openai/v1` values to `.../openai/v1/responses` before calling `openai/codex-action`, so a shared app endpoint secret can stay as the resource root.
 
 ### Breaking change: endpoint secret / input rename
 
@@ -41,7 +46,7 @@ Callers must rename the repository secret and any action/workflow inputs that st
 | Secret `AZURE_OPENAI_RESPONSES_ENDPOINT` | `AZURE_OPENAI_ENDPOINT` |
 | Input / reusable-workflow secret `azure_openai_responses_endpoint` | `azure_openai_endpoint` |
 
-The value is unchanged (still the full Azure OpenAI Responses API URL). Downstream workflows that pass the old input or secret name will fail validation until updated.
+Downstream workflows that pass the old input or secret name will fail validation until updated. The secret value may now be a resource root; a full Responses URL still works unchanged.
 
 ## Recommended caller workflow
 
@@ -162,7 +167,7 @@ That means:
 - `pr_number`: required PR number to review
 - `codex_model`: required Azure deployment name
 - `azure_openai_api_key`: required Azure OpenAI API key
-- `azure_openai_endpoint`: required Azure OpenAI Responses API endpoint
+- `azure_openai_endpoint`: required Azure OpenAI endpoint (resource root or full Responses API URL)
 - `working_directory`: checkout subdirectory to run from
 - `node_version`: Node.js version for `actions/setup-node`
 - `pnpm_version`: pnpm version for `pnpm/action-setup`
